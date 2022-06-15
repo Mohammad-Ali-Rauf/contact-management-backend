@@ -3,11 +3,12 @@ const router = express.Router();
 const { check, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 
-const User = require("../models/User");
-const Contact = require("../models/Contact");
+const User = require('../models/User');
+const Contact = require('../models/Contact');
+
 
 // @route   GET api/contacts
-// @desc    Get All Contacts
+// @desc    Get all the user's contacts
 // @access  Private
 router.get('/', auth, async (req, res) => {
     try {
@@ -15,31 +16,31 @@ router.get('/', auth, async (req, res) => {
             date: -1
         });
         res.json(contacts);
-    } catch (err) {
+    } catch(err) {
         console.error(err.message);
         res.status(500).send('Server Error');
     }
 });
 
 // @route   POST api/contacts
-// @desc    Add a Contact
+// @desc    Add a new contact
 // @access  Private
 router.post('/', [ auth, [
-    check('name', 'Name is Required').not().isEmpty(),
+    check('name', 'Name is required').not().isEmpty()
 ] ], async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    if(!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() })
     }
 
-    const { name, email, phone, relationship } = req.body;
+    const { name, email, phone, type } = req.body;
 
     try {
         const newContact = new Contact({
             name,
             email,
             phone,
-            relationship,
+            type,
             user: req.user.id
         })
 
@@ -47,9 +48,9 @@ router.post('/', [ auth, [
 
         res.json(contact);
 
-    } catch (err) {
+    } catch(err) {
         console.error(err.message);
-        res.status(500).send('Server Error')
+        res.status(500).send('Server Error');
     }
 });
 
@@ -58,63 +59,66 @@ router.post('/', [ auth, [
 // @access  Private
 router.put('/:id', auth, async (req, res) => {
 
-    const { name, email, phone, relationship } = req.body;
+    const { name, email, phone, type } = req.body;
 
-    const contactDetails = {  };
+    const contactFields = { };
 
-    if(name) contactDetails.name = name;
-    if(email) contactDetails.email = email;
-    if(phone) contactDetails.phone = phone;
-    if(relationship) contactDetails.relationship = relationship;
+    if(name) contactFields.name = name;
+    if(email) contactFields.email = email;
+    if(phone) contactFields.phone = phone;
+    if(type) contactFields.type = type;
 
     try {
         let contact = await Contact.findById(req.params.id);
 
-        if(!contact) return res.status(404).json({ msg: 'Contact not exists' })
+        // Check if the contact exists
+        if(!contact) return res.status(404).json({ msg: 'This contact does not exist.' })
 
+        // If the contact exists, then make sure the currently signed in user owns the contact
         if(contact.user.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'You do not have access to update this contact' })
+            return res.status(401).json({ msg: 'You do not have the correct authorization to update this contact.' })
         }
 
-        // Update contact
+        // Update contact if above conditions pass
         contact = await Contact.findByIdAndUpdate(req.params.id,
-            { $set: contactDetails }, 
+            { $set: contactFields },
             { new: true }
-        );
-
-        res.json({ contact });
+            );
+        
+        // Return the updated contact
+        res.json(contact);
 
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
     }
-
 });
 
 // @route   DELETE api/contacts/:id
 // @desc    Delete a contact
 // @access  Private
 router.delete('/:id', auth, async (req, res) => {
-
     try {
         let contact = await Contact.findById(req.params.id);
 
-        if(!contact) return res.status(404).json({ msg: 'Contact not exists' })
+        // Check if the contact exists
+        if(!contact) return res.status(404).json({ msg: 'This contact does not exist.' })
 
+        // If the contact exists, then make sure the currently signed in user owns the contact
         if(contact.user.toString() !== req.user.id) {
-            return res.status(401).json({ msg: 'You do not have access to delete this contact' })
+            return res.status(401).json({ msg: 'You do not have the correct authorization to update this contact.' })
         }
 
-        // Delete contact
+        // Find and remove the contact from MongoDB
         await Contact.findByIdAndRemove(req.params.id);
-
-        res.json({ msg: 'Contact Deleted Successfully' });
+        
+        // Return a confirmation message
+        res.json({ msg: 'This contact has been removed.' });
 
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
     }
-
-})
+});
 
 module.exports = router;
